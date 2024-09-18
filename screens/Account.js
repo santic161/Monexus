@@ -1,6 +1,9 @@
 import React from 'react';
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Image, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { getAuth } from 'firebase/auth';
+import { useUser } from '../context/UserContext';
 
 const SettingItem = ({ icon, title, hasToggle = false, isToggled = false, onToggle, hasChevron = true }) => (
   <TouchableOpacity style={styles.settingItem}>
@@ -19,7 +22,16 @@ const SettingItem = ({ icon, title, hasToggle = false, isToggled = false, onTogg
   </TouchableOpacity>
 );
 
-export default function AccountScreen() {
+export default function AccountScreen({ navigation }) {
+  const { user, updateUser } = useUser();
+
+  const handleSignOut = async () => {
+    GoogleSignin.revokeAccess();
+    GoogleSignin.signOut()
+    updateUser(null);
+    navigation.navigate("Onboarding");
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -31,7 +43,7 @@ export default function AccountScreen() {
           <Ionicons name="search" size={24} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
-      
+
       <ScrollView style={styles.content}>
         <View style={styles.profileSection}>
           <Image
@@ -39,20 +51,20 @@ export default function AccountScreen() {
             style={styles.profileImage}
           />
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>Lakshay Mahur</Text>
+            <Text style={styles.profileName}>{user?.displayName}</Text>
             <Text style={styles.profileEmail}>lakshaymahur***@gmail.com</Text>
           </View>
           <TouchableOpacity>
             <Ionicons name="pencil" size={24} color="#00D09C" />
           </TouchableOpacity>
         </View>
-        
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Additions</Text>
           <SettingItem icon="qr-code" title="Scan Code" />
           <SettingItem icon="diamond" title="Get Premium" />
         </View>
-        
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Preferences</Text>
           <SettingItem
@@ -60,24 +72,24 @@ export default function AccountScreen() {
             title="Notification"
             hasToggle={true}
             isToggled={true}
-            onToggle={() => {}}
+            onToggle={() => { }}
           />
           <SettingItem
             icon="lock-closed"
             title="Create/Change Passcode"
             hasToggle={true}
             isToggled={false}
-            onToggle={() => {}}
+            onToggle={() => { }}
           />
         </View>
-        
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Feedback & Help</Text>
           <SettingItem icon="star" title="Rate Splitwise" />
           <SettingItem icon="help-circle" title="Help & Support" />
         </View>
-        
-        <TouchableOpacity style={styles.logoutButton}>
+
+        <TouchableOpacity style={styles.logoutButton} onPress={() => handleSignOut()}>
           <Ionicons name="log-out" size={24} color="#00D09C" style={styles.logoutIcon} />
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>

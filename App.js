@@ -15,6 +15,7 @@ import AccountScreen from './screens/Account';
 import AddExpenseScreen from './screens/AddExpense';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar, TouchableOpacity, View } from 'react-native';
+import { UserProvider } from './context/UserContext';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -39,7 +40,7 @@ function MainTabs() {
               iconName = focused ? 'person' : 'person-outline';
             }
 
-            return <Ionicons name={iconName} size={size+5} color={color} />;
+            return <Ionicons name={iconName} size={size + 5} color={color} />;
           },
           tabBarActiveTintColor: '#00D09C',
           tabBarInactiveTintColor: 'gray',
@@ -92,7 +93,7 @@ function MainTabs() {
 
 export default function App() {
   //Change me!
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -119,23 +120,22 @@ export default function App() {
   return (
     <SafeAreaView style={{ flex: 1 }}>
       <StatusBar translucent={true} backgroundColor="#101010" />
-      <NavigationContainer>
-        <Stack.Navigator
-          screenOptions={{
-            headerShown: false,
-          }}
-        >
-          {isLoggedIn ? (
-            <Stack.Screen name="Main" component={MainTabs} />
-          ) : (
-            <>
+      <UserProvider>
+        <NavigationContainer>
+          <Stack.Navigator
+            screenOptions={{
+              headerShown: false,
+            }}
+          >
+            <Stack.Group>
               <Stack.Screen name="Onboarding" component={OnboardingScreen} />
               <Stack.Screen name="Login" component={LoginScreen} />
               <Stack.Screen name="SignUp" component={SignUpScreen} />
-            </>
-          )}
-        </Stack.Navigator>
-      </NavigationContainer>
+              <Stack.Screen name="Main" component={MainTabs} />
+            </Stack.Group>
+          </Stack.Navigator>
+        </NavigationContainer>
+      </UserProvider>
     </SafeAreaView>
   );
 }

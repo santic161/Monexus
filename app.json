@@ -1,27 +1,39 @@
 {
   "expo": {
-    "name": "Splitwise",
-    "slug": "Splitwise",
+    "name": "Monexus",
+    "slug": "Monexus",
+    "originalFullName": "@santi.c161/Monexus",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "icon": "./assets/New Logo 3.png",
+    "userInterfaceStyle": "dark",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/New Splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#101010"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.monexus.monexus",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/New Logo 3.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "googleServicesFile": "./google-services.json",
+      "package": "com.monexus.monexus"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "2cd2b508-2623-4ab7-9407-4b0ff8b36304"
+      }
+    },
+    "plugins": ["@react-native-google-signin/google-signin"],
+    "scheme": "com.monexus.monexus"
   }
 }
