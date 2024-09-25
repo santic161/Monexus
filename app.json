@@ -5,11 +5,11 @@
     "originalFullName": "@santi.c161/Monexus",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/New Logo 3.png",
+    "icon": "./assets/Figma Icon.png",
     "userInterfaceStyle": "dark",
     "splash": {
-      "image": "./assets/New Splash.png",
-      "resizeMode": "contain",
+      "image": "./assets/Figma Splash.png",
+      "resizeMode": "cover",
       "backgroundColor": "#101010"
     },
     "ios": {
@@ -19,8 +19,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/New Logo 3.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/adaptative Figma icon.png",
+        "backgroundColor": "#101010"
       },
       "googleServicesFile": "./google-services.json",
       "package": "com.monexus.monexus"
@@ -33,7 +33,10 @@
         "projectId": "2cd2b508-2623-4ab7-9407-4b0ff8b36304"
       }
     },
-    "plugins": ["@react-native-google-signin/google-signin"],
+    "plugins": [
+      "@react-native-google-signin/google-signin",
+      "expo-localization"
+    ],
     "scheme": "com.monexus.monexus"
   }
 }

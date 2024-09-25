@@ -22,12 +22,12 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-initializeAuth(app, {
+
+
+const googleProvider = new GoogleAuthProvider();
+const auth = initializeAuth(app, {
     persistence: getReactNativePersistence(ReactNativeAsyncStorage)
 });
-
-const googleProvider = new GoogleAuthProvider()
-const auth = getAuth(app);
 const db = getFirestore(app);
 
 export { auth, db, googleProvider };

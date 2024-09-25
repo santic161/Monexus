@@ -1,76 +1,33 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Image } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { GoogleSignin, statusCodes, GoogleSigninButton } from '@react-native-google-signin/google-signin';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 import { auth } from '../firebase/firebaseConfig';
+import { useUser } from '../context/UserContext';
 
 import GoogleIcon from "../assets/GoogleLogo.png"
 
 
 
 export default function OnboardingScreen({ navigation }) {
-  const [userInfo, setUserInfo] = useState(null);
+  const { logIn } = useUser();
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    GoogleSignin.configure({
-      webClientId: '466482242726-o55tavogdbi0tbp5e1r6fb5rqvt1h6ij.apps.googleusercontent.com', // Replace with your web client ID
-    });
-
-    checkPreviousSignIn();
-  }, []);
-
-  async function checkPreviousSignIn() {
-    try {
-      const isSignedIn = GoogleSignin.hasPreviousSignIn();
-      console.log("IsSignedIn: " + isSignedIn);
-      if (isSignedIn) {
-        try {
-          const userInfo = await GoogleSignin.signInSilently();
-          setUserInfo(userInfo);
-
-          navigation.navigate('Main', { screen: 'Home' });
-
-        } catch (error) {
-          if (error.code === statusCodes.SIGN_IN_REQUIRED) {
-            // User hasn't signed in yet
-            console.log('User hasn\'t signed in yet');
-          } else {
-            // Some other error
-            console.log('Error checking previous sign-in:', error);
-          }
-        }
-      }
-    } catch (e) {
-      console.error(e)
-    }
-  }
 
   async function handleSignInWithGoogle() {
     setLoading(true);
     try {
       await GoogleSignin.hasPlayServices();
       const userInfo = (await GoogleSignin.signIn()).data;
-      setUserInfo(userInfo);
-
+      console.log(userInfo)
       // Create a Google credential with the token
       const { idToken } = userInfo;
       if (!idToken) {
         throw new Error('No ID token present in Google Sign-In response');
       }
       const credential = GoogleAuthProvider.credential(idToken);
-
       // Sign in to Firebase with the Google credential
       const result = await signInWithCredential(auth, credential);
-      console.log('Firebase sign-in result:', result);
-      // Store user info
-      await AsyncStorage.setItem('userInfo', JSON.stringify(result.user));
-
-      // Navigate to main app
-      navigation.navigate('Main', { screen: 'Home' });
-
+      logIn(result.user);
     } catch (error) {
       if (error.code === statusCodes.SIGN_IN_CANCELLED) {
         console.log('Sign in cancelled');
@@ -88,15 +45,10 @@ export default function OnboardingScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={['#00D09C', '#00B386']}
-        style={styles.logoBackground}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <Text style={styles.logoText}>S</Text>
-      </LinearGradient>
-      <Text style={styles.logoTitle}>Splitwise</Text>
+      {/* <View style={styles.logoBackground}> */}
+      <Image source={require("../assets/icon transparent.png")} style={styles.logoBackground} />
+      <Text style={styles.logoTitle}>Monexus</Text>
+      {/* </View>s */}
 
       <TouchableOpacity
         style={styles.loginButton}

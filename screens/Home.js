@@ -1,116 +1,205 @@
-import React from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
+import React, { useState, useCallback, useEffect } from 'react';
+import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { formatNumber } from 'react-native-currency-input';
+import { getLocales } from 'expo-localization';
+import { LinearGradient } from 'expo-linear-gradient';
+import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { useNavigation, DrawerActions } from '@react-navigation/native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  runOnJS,
+  interpolate,
+  Extrapolate,
+  withTiming,
+} from 'react-native-reanimated';
+import { useUser } from '../context/UserContext';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebase/firebaseConfig';
 
-const GroupCard = () => (
-  <View style={styles.groupCard}>
-    <View style={styles.groupHeader}>
-      <Image
-        source={{ uri: 'https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/avatars/ae/aea4afc8c79da7a7fbea94b8cc94db68bdf18325_full.jpg' }}
-        style={styles.groupIcon}
-      />
-      <View style={{ flexDirection: 'column', justifyContent: 'space-between', flex: 1 }}>
-        <View style={styles.totalContainer}>
-          <View style={styles.totalItem}>
-            <Text style={styles.totalLabel}>Total Owed</Text>
-            <Text style={[styles.totalAmount, styles.totalOwed]}>+$102.28</Text>
-          </View>
-          <View style={styles.totalItem}>
-            <Text style={styles.totalLabel}>Total Owe</Text>
-            <Text style={[styles.totalAmount, styles.totalOwe]}>-$76.84</Text>
-          </View>
-        </View>
-        <View style={styles.progressBar}>
-          <View style={styles.progressOwed} />
-          <View style={styles.progressOwe} />
-        </View>
-      </View>
+const locale = getLocales()[0];
+
+const FriendItem = ({ name, amount, description, date, image, type }) => (
+  <View style={styles.friendItem}>
+    <Image source={{ uri: image }} style={styles.avatar} />
+    <View style={styles.friendInfo}>
+      <Text style={styles.friendName}>{name}</Text>
+      <Text style={styles.friendDescription}>{description}</Text>
     </View>
-
-
-    <View style={{ flexDirection: 'column' }}>
-      <View style={styles.balances}>
-        <Text style={styles.groupName}>Tokyo 2025</Text>
-        <View style={{ alignItems: "flex-end" }}>
-          <Text style={styles.balanceText}>Sumit owes you <Text style={[styles.balanceAmount, { color: "#A3D6CA" }]}>$86.92</Text></Text>
-          <Text style={styles.balanceText}>you owe yash <Text style={[styles.balanceAmount, { color: "#F69C66" }]}>$34.62</Text></Text>
-        </View>
-      </View>
-      <View style={styles.groupInfo}>
-        <View style={styles.groupMembers}>
-          <Image source={{ uri: 'https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/avatars/3b/3b23dd976e82d378525de25b91b6329d45fbb43b_full.jpg' }} style={styles.memberAvatar} />
-          <Image source={{ uri: 'https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/avatars/3b/3b33468b13d569d115006690f7b61b31d782346b_full.jpg' }} style={styles.memberAvatar} />
-          <Image source={{ uri: 'https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/avatars/11/11559971d0a2324d33a9c8718351f089f7e9733d_full.jpg' }} style={styles.memberAvatar} />
-        </View>
-        <TouchableOpacity>
-          <Text style={styles.moreText}>+more</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-
-    <View style={styles.groupActions}>
-      <TouchableOpacity style={[styles.actionButton, styles.settleUpButton]}>
-        <Text style={[styles.actionButtonText, {
-          color: '#FFF',
-        }]}>Settle Up</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.actionButton}>
-        <Text style={[styles.actionButtonText, {
-          color: '#EC5601',
-        }]}>View Details</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.actionButton}>
-        <Text style={[styles.actionButtonText, {
-          color: '#EC5601',
-        }]}>Balance</Text>
-      </TouchableOpacity>
+    <View style={styles.amountContainer}>
+      <Text style={[styles.amount, { color: type === 'owe' ? '#F97316' : type === 'owed' ? '#00D09C' : '#9CA3AF' }]}>
+        {type === 'settled' ? 'Settled' : `₹ ${formatNumber(amount, { separator: "." })}`}
+      </Text>
+      <Ionicons name="chevron-forward" size={20} color="#4B5563" />
     </View>
   </View>
 );
 
-const ExpenseItem = ({ icon, name, date, amount, type }) => (
-  <View style={styles.expenseItem}>
-    <View style={styles.expenseIcon}>
-      <Ionicons name={icon} size={24} color="#FFFFFF" />
-    </View>
-    <View style={styles.expenseInfo}>
-      <Text style={styles.expenseName}>{name}</Text>
-      <Text style={styles.expenseDate}>{date}</Text>
-    </View>
-    <View style={styles.expenseAmount}>
-      <Text style={styles.expenseAmountText}>{amount}</Text>
-      <View style={[styles.expenseType, { backgroundColor: type === 'Lent' ? '#00D09C' : '#EC5601' }]}>
-        <Text style={styles.expenseTypeText}>{type}</Text>
-      </View>
-    </View>
-  </View>
-);
+const tabs = ['youOwe', 'owesYou', 'settledUp'];
 
 export default function HomeScreen() {
+  const [activeTab, setActiveTab] = useState('owesYou');
+  const [userGroups, setUserGroups] = useState([]);
+  const navigation = useNavigation();
+  const swipeAnim = useSharedValue(0);
+  const tabIndicatorPosition = useSharedValue(1);
+  const { user } = useUser();
+
+  const payAmount = 150.5;
+  const receiveAmount = 250.21;
+  const totalAmount = payAmount + receiveAmount;
+  const payPercentage = (payAmount / totalAmount) * 100;
+  const receivePercentage = (receiveAmount / totalAmount) * 100;
+
+  const screenWidth = Dimensions.get('window').width;
+  const tabWidth = screenWidth / 3;
+
+  useEffect(() => {
+    if (user) {
+      const q = query(collection(db, 'groups'), where('members', 'array-contains', user.uid));
+      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const groups = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setUserGroups(groups);
+      });
+
+      return () => unsubscribe();
+    }
+  }, [user]);
+
+  useEffect(() => {
+    tabIndicatorPosition.value = withTiming(tabs.indexOf(activeTab), {
+      duration: 300,
+    });
+  }, [activeTab]);
+
+  const updateActiveTab = useCallback((newTab) => {
+    setActiveTab(newTab);
+  }, []);
+
+  const swipeGesture = Gesture.Pan()
+    .activeOffsetX([-10, 10])
+    .onUpdate((event) => {
+      swipeAnim.value = event.translationX;
+    })
+    .onEnd((event) => {
+      const currentIndex = tabs.indexOf(activeTab);
+      if (event.velocityX > 500 && currentIndex > 0) {
+        // Fast swipe right
+        runOnJS(updateActiveTab)(tabs[currentIndex - 1]);
+      } else if (event.velocityX < -500 && currentIndex < tabs.length - 1) {
+        // Fast swipe left
+        runOnJS(updateActiveTab)(tabs[currentIndex + 1]);
+      } else if (event.translationX > screenWidth * 0.3 && currentIndex > 0) {
+        // Swipe right
+        runOnJS(updateActiveTab)(tabs[currentIndex - 1]);
+      } else if (event.translationX < -screenWidth * 0.3 && currentIndex < tabs.length - 1) {
+        // Swipe left
+        runOnJS(updateActiveTab)(tabs[currentIndex + 1]);
+      }
+      swipeAnim.value = withSpring(0, {
+        stiffness: 1000,
+        damping: 500,
+        mass: 1,
+        overshootClamping: true,
+        restDisplacementThreshold: 0.01,
+        restSpeedThreshold: 0.01,
+      });
+    });
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const translateX = interpolate(
+      swipeAnim.value,
+      [-screenWidth, 0, screenWidth],
+      [-screenWidth * 0.3, 0, screenWidth * 0.3],
+      Extrapolate.CLAMP
+    );
+
+    return {
+      transform: [{ translateX }],
+    };
+  });
+
+  const tabIndicatorStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateX: tabWidth * tabIndicatorPosition.value }],
+    };
+  });
+
+  const renderFriendItems = useCallback(() => {
+    return userGroups.map((group) => (
+      <FriendItem
+        key={group.id}
+        name={group.name}
+        amount={0}
+        description={`${group.members.length} members`}
+        date=""
+        image="https://randomuser.me/api/portraits/men/1.jpg"
+        type="owed"
+      />
+    ));
+  }, [userGroups]);
+
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity>
-          <Ionicons name="menu" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Home</Text>
-        <TouchableOpacity>
-          <Ionicons name="settings-outline" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-      </View>
-      <ScrollView>
-        <GroupCard />
-        <View style={styles.expenseList}>
-          <Text style={styles.monthHeader}>May, 2024</Text>
-          <ExpenseItem icon="print" name="PDC Printout" date="May, 06" amount="$20.00" type="Lent" />
-          <ExpenseItem icon="fast-food" name="Haldiram's" date="May, 06" amount="$13.16" type="Borrowed" />
-          <ExpenseItem icon="airplane" name="Plane Tickets" date="May, 06" amount="$418.42" type="Borrowed" />
-          <ExpenseItem icon="bed" name="Hotel trip" date="May, 05" amount="$573.32" type="Lent" />
-          <Text style={styles.monthHeader}>April, 2024</Text>
-          <ExpenseItem icon="fast-food" name="KFC Lunch" date="April, 28" amount="$18.00" type="Borrowed" />
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.dispatch(DrawerActions.openDrawer())}>
+            <Ionicons name="menu" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Home</Text>
+          <TouchableOpacity>
+            <Ionicons name="search" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
-      </ScrollView>
-    </View>
+        <View style={styles.balanceContainerGlobal}>
+          <View style={styles.balanceContainer}>
+            <LinearGradient
+              colors={['#991B1B', '#065F46']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              locations={[payPercentage / 100, payPercentage / 100]}
+              style={styles.balanceBackground}
+            />
+            <View style={styles.balanceContent}>
+              <View style={[styles.balanceBox, { alignItems: "flex-start" }]}>
+                <Text style={styles.balanceLabel}>Pay</Text>
+                <Text style={styles.balanceAmount}>{formatNumber(payAmount, { prefix: locale.currencySymbol, precision: 2 })}</Text>
+              </View>
+              <View style={[styles.balanceBox, { alignItems: "flex-end" }]}>
+                <Text style={styles.balanceLabel}>Receive</Text>
+                <Text style={styles.balanceAmount}>{formatNumber(receiveAmount, { prefix: locale.currencySymbol, precision: 2 })}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.tabContainer}>
+          {tabs.map((tab, index) => (
+            <TouchableOpacity
+              key={tab}
+              style={styles.tab}
+              onPress={() => setActiveTab(tab)}
+            >
+              <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
+                {tab === 'youOwe' ? 'YOU OWE' : tab === 'owesYou' ? 'OWES YOU' : 'SETTLED UP'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+          <Animated.View style={[styles.tabIndicator, tabIndicatorStyle]} />
+        </View>
+
+        <GestureDetector gesture={swipeGesture}>
+          <Animated.View style={[styles.scrollView, animatedStyle]}>
+            <ScrollView>
+              {renderFriendItems()}
+            </ScrollView>
+          </Animated.View>
+        </GestureDetector>
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
 
@@ -124,183 +213,124 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    // borderBottomWidth: 1,
-    // borderBottomColor: '#2C2C2E',
   },
   headerTitle: {
     color: '#FFFFFF',
     fontSize: 20,
     fontWeight: 'bold',
   },
-  groupCard: {
-    backgroundColor: '#2B2C2D',
-    borderRadius: 20,
-    margin: 16,
+  headerIcons: {
+    flexDirection: 'row',
+  },
+  iconButton: {
+    marginLeft: 16,
+  },
+  balanceContainerGlobal: {
     padding: 16,
   },
-  groupHeader: {
+  balanceContainer: {
+    borderRadius: 15,
+    overflow: 'hidden',
+    height: 80,
+    position: 'relative',
+  },
+  balanceBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  balanceContent: {
     flexDirection: 'row',
-    marginBottom: 8,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
-  groupIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
-    marginRight: 12,
-  },
-  totalContainer: {
+  balanceBox: {
     flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    padding: 16,
+    paddingHorizontal: 25,
+    justifyContent: 'center',
   },
-  totalItem: {
-    alignItems: 'flex-end',
-  },
-  totalLabel: {
-    color: '#AAAAAA',
-    fontSize: 12,
-  },
-  totalAmount: {
+  balanceLabel: {
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  totalOwed: {
-    color: '#00D09C',
-  },
-  totalOwe: {
-    color: '#F69C66',
-  },
-  progressBar: {
-    height: 13,
-    flexDirection: 'row',
-    borderRadius: 8,
-    overflow: 'hidden',
-    marginBottom: 2,
-  },
-  progressOwed: {
-    flex: 100,
-    backgroundColor: '#00D09C',
-  },
-  progressOwe: {
-    flex: 76.84,
-    backgroundColor: '#101010',
-  },
-  groupInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-    marginTop: -10
-  },
-  groupName: {
     color: '#FFFFFF',
-    // paddingRight: 50,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  groupMembers: {
-    flexDirection: 'row',
-    marginLeft: 10,
-  },
-  memberAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginLeft: -10,
-    borderWidth: 2,
-    borderColor: '#2C2C2E',
-  },
-  balances: {
-    // marginBottom: 8,
-    marginTop: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  balanceText: {
-    color: '#AAAAAA',
-    fontSize: 14,
+    opacity: 0.8,
   },
   balanceAmount: {
+    fontSize: 26,
     fontWeight: 'bold',
-  },
-  moreText: {
-    color: '#FFF',
-    fontSize: 14,
-    // marginTop: 4,
-  },
-  groupActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  actionButton: {
-    backgroundColor: '#2B2C2D',
-    borderColor: "#EC5601",
-    borderWidth: 1.5,
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    borderRadius: 16,
-  },
-  settleUpButton: {
-    backgroundColor: '#EC5601',
-  },
-  actionButtonText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  expenseList: {
-    paddingHorizontal: 16,
-  },
-  monthHeader: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: 16,
-    marginBottom: 8,
+    marginTop: 4,
   },
-  expenseItem: {
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#101010',
+    paddingTop: 8,
+    position: 'relative',
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  tabText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#9CA3AF',
+  },
+  activeTabText: {
+    color: '#00D09C',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    width: Dimensions.get('window').width / 3,
+    height: 2,
+    backgroundColor: '#00D09C',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  friendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2C2C2E',
   },
-  expenseIcon: {
+  avatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#3A3A3C',
-    justifyContent: 'center',
-    alignItems: 'center',
     marginRight: 16,
   },
-  expenseInfo: {
+  friendInfo: {
     flex: 1,
   },
-  expenseName: {
-    color: '#FFFFFF',
+  friendName: {
     fontSize: 16,
     fontWeight: 'bold',
+    color: '#FFFFFF',
   },
-  expenseDate: {
-    color: '#AAAAAA',
+  friendDescription: {
     fontSize: 14,
-  },
-  expenseAmount: {
-    alignItems: 'flex-end',
-  },
-  expenseAmountText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  expenseType: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 12,
+    color: '#9CA3AF',
     marginTop: 4,
   },
-  expenseTypeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
+  amountContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  amount: {
+    fontSize: 16,
     fontWeight: 'bold',
+    marginRight: 4,
   },
 });

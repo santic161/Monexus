@@ -1,70 +1,157 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, TextInput, Image, ScrollView } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, TextInput, Image, ScrollView, Modal, Animated, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import CurrencyInput, { FakeCurrencyInput } from 'react-native-currency-input';
+import { FakeCurrencyInput } from 'react-native-currency-input';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { BlurView } from 'expo-blur';
+import { addExpense, fetchGroups, fetchGroupMembers } from '../utils/firebaseUtils';
+import { useUser } from '../context/UserContext';
+import GroupSelector from '../components/Add Expense/GroupSelector';
 
 export default function AddExpenseScreen({ navigation }) {
-  const [amount, setAmount] = useState(2310.255);
+  const { user } = useUser();
+  const [amount, setAmount] = useState(0);
   const [description, setDescription] = useState('');
   const [splitMethod, setSplitMethod] = useState('Equally');
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [paidBy, setPaidBy] = useState(user.uid);
+  const [date, setDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [note, setNote] = useState('');
+  const [showGroupPicker, setShowGroupPicker] = useState(false);
+  const [showPaidByPicker, setShowPaidByPicker] = useState(false);
+  const [showNoteInput, setShowNoteInput] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [groups, setGroups] = useState([]);
+  const [groupMembers, setGroupMembers] = useState([]);
+
+  const descriptionInputRef = useRef(null);
+  const scrollViewRef = useRef(null);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
+    loadGroups();
+  }, []);
+
+  const loadGroups = async () => {
+    setIsLoading(true);
+    try {
+      const fetchedGroups = await fetchGroups(user.uid);
+      setGroups(fetchedGroups);
+      if (fetchedGroups.length === 0) {
+        navigation.navigate('CreateGroup');
+      } else {
+        setSelectedGroup(fetchedGroups[0]);
+        loadGroupMembers(fetchedGroups[0].id);
+      }
+    } catch (error) {
+      console.error('Error fetching groups:', error);
+      setError('Failed to fetch groups. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadGroupMembers = async (groupId) => {
+    try {
+      const members = await fetchGroupMembers(groupId);
+      setGroupMembers(members);
+    } catch (error) {
+      console.error('Error fetching group members:', error);
+    }
+  };
+
+  const handleAddExpense = async () => {
+    if (!selectedGroup || !description || !amount) {
+      setError('Please fill in all required fields');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const expenseData = {
+        groupId: selectedGroup.id,
+        title: description,
+        amount: parseFloat(amount),
+        splitMethod,
+        paidBy,
+        date: date.toISOString(),
+        note,
+        createdBy: user.uid,
+      };
+
+      await addExpense(expenseData);
+      navigation.goBack();
+    } catch (error) {
+      console.error('Error adding expense: ', error);
+      setError('Failed to add expense. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
+          <Ionicons name="close" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Add Expense</Text>
-        <TouchableOpacity>
-          <Ionicons name="checkmark" size={24} color="#00D09C" />
+        <TouchableOpacity onPress={handleAddExpense} style={styles.headerButton} disabled={isLoading}>
+          {isLoading ? (
+            <ActivityIndicator color="#00D09C" />
+          ) : (
+            <Text style={styles.saveButtonText}>Save</Text>
+          )}
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content}>
-        <TouchableOpacity style={styles.groupSelector}>
-          <View style={styles.groupInfo}>
-            <Image source={{ uri: 'https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/avatars/ae/aea4afc8c79da7a7fbea94b8cc94db68bdf18325_full.jpg' }} style={styles.groupImage} />
-            <Text style={styles.groupName}>Tokyo 2025</Text>
-            <Ionicons name="chevron-down" size={20} color="#AAAAAA" style={{ justifyContent: 'flex-end', marginRight: 5 }} />
-          </View>
-        </TouchableOpacity>
-        <View style={styles.groupMembers}>
-          <Image source={{ uri: 'https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/avatars/3b/3b23dd976e82d378525de25b91b6329d45fbb43b_full.jpg' }} style={styles.memberAvatar} />
-          <Image source={{ uri: 'https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/avatars/3b/3b33468b13d569d115006690f7b61b31d782346b_full.jpg' }} style={styles.memberAvatar} />
-          <Image source={{ uri: 'https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/avatars/11/11559971d0a2324d33a9c8718351f089f7e9733d_full.jpg' }} style={styles.memberAvatar} />
-        </View>
+      <ScrollView 
+        style={styles.content}
+        ref={scrollViewRef}
+        keyboardShouldPersistTaps="handled"
+      >
+        {error && (
+          <Text style={styles.errorText}>{error}</Text>
+        )}
+
+        <GroupSelector
+          selectedGroup={selectedGroup}
+          groups={groups}
+          onSelectGroup={(group) => {
+            setSelectedGroup(group);
+            loadGroupMembers(group.id);
+          }}
+        />
 
         <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>For</Text>
           <TextInput
+            ref={descriptionInputRef}
             style={styles.input}
-            placeholder="Enter a Description"
+            placeholder="Enter a description"
             placeholderTextColor="#AAAAAA"
-            autoCapitalize='true'
-            cursorColor={"#EFEFEF"}
+            autoCapitalize='sentences'
             value={description}
             onChangeText={setDescription}
           />
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Amount</Text>
-          {/* <TextInput
-            value={`$${amount}`}
-            onChangeText={(text) => setAmount(text.replace('$', ''))}
-            keyboardType="numeric"
-            /> */}
           <FakeCurrencyInput
             value={amount}
-            onChangeValue={val => setAmount(val)}
+            onChangeValue={setAmount}
             style={styles.amountInput}
-            caretHidden={true}
-            // renderTextInput={textInputProps => <FakeCurrencyInput  {...textInputProps} variant='filled' />}
-            renderText
             prefix="$"
-            delimiter="."
-            separator=","
-            cursorColor={"#FFF"}
+            delimiter=","
+            separator="."
             precision={2}
           />
         </View>
@@ -91,32 +178,101 @@ export default function AddExpenseScreen({ navigation }) {
           ))}
         </View>
 
-        <TouchableOpacity style={styles.paidByContainer}>
+        <TouchableOpacity style={styles.paidByContainer} onPress={() => setShowPaidByPicker(true)}>
           <Text style={styles.paidByLabel}>Paid by</Text>
           <View style={styles.paidBySelector}>
-            <Image source={{ uri: '/placeholder.svg?height=30&width=30' }} style={styles.paidByAvatar} />
-            <Text style={styles.paidByText}>you</Text>
+            <Image source={{ uri: groupMembers.find(m => m.id === paidBy)?.image }} style={styles.paidByAvatar} />
+            <Text style={styles.paidByText}>{groupMembers.find(m => m.id === paidBy)?.name}</Text>
             <Ionicons name="chevron-down" size={20} color="#AAAAAA" />
           </View>
         </TouchableOpacity>
 
         <View style={styles.actionButtons}>
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity style={styles.actionButton} onPress={() => setShowDatePicker(true)}>
             <Ionicons name="calendar-outline" size={24} color="#00D09C" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="camera-outline" size={24} color="#00D09C" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity style={styles.actionButton} onPress={() => setShowNoteInput(true)}>
             <Ionicons name="create-outline" size={24} color="#00D09C" />
           </TouchableOpacity>
         </View>
+
+        {showDatePicker && (
+          <DateTimePicker
+            value={date}
+            mode="date"
+            display="spinner"
+            onChange={(event, selectedDate) => {
+              setShowDatePicker(false);
+              if (selectedDate) setDate(selectedDate);
+            }}
+            style={styles.datePicker}
+          />
+        )}
       </ScrollView>
 
-      <TouchableOpacity style={styles.doneButton}>
-        <Text style={styles.doneButtonText}>Done</Text>
-      </TouchableOpacity>
-    </View>
+      <Modal
+        visible={showPaidByPicker}
+        transparent={true}
+        animationType="slide"
+      >
+        <BlurView intensity={100} style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Paid By</Text>
+            <ScrollView>
+              {groupMembers.map((member) => (
+                <TouchableOpacity
+                  key={member.id}
+                  style={styles.memberItem}
+                  onPress={() => {
+                    setPaidBy(member.id);
+                    setShowPaidByPicker(false);
+                  }}
+                >
+                  <Image source={{ uri: member.image }} style={styles.memberItemImage} />
+                  <Text style={styles.memberItemName}>{member.name}</Text>
+                  {paidBy === member.id && (
+                    <Ionicons name="checkmark-circle" size={24} color="#00D09C" style={styles.memberItemCheck} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowPaidByPicker(false)}
+            >
+              <Text style={styles.closeButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </BlurView>
+      </Modal>
+
+      <Modal
+        visible={showNoteInput}
+        transparent={true}
+        animationType="slide"
+      >
+        <BlurView intensity={100} style={styles.modalContainer}>
+          <View style={styles.noteInputContainer}>
+            <Text style={styles.modalTitle}>Add a note</Text>
+            <TextInput
+              style={styles.noteInput}
+              multiline
+              numberOfLines={4}
+              value={note}
+              onChangeText={setNote}
+              placeholder="Enter your note here"
+              placeholderTextColor="#AAAAAA"
+            />
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowNoteInput(false)}
+            >
+              <Text style={styles.closeButtonText}>Save Note</Text>
+            </TouchableOpacity>
+          </View>
+        </BlurView>
+      </Modal>
+    </Animated.View>
   );
 }
 
@@ -130,108 +286,69 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    // borderBottomWidth: 1,
-    // borderBottomColor: '#2C2C2E',
+    borderBottomWidth: 1,
+    borderBottomColor: '#2C2C2E',
+  },
+  headerButton: {
+    padding: 8,
   },
   headerTitle: {
     color: '#FFFFFF',
     fontSize: 20,
     fontWeight: 'bold',
   },
+  saveButtonText: {
+    color: '#00D09C',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
   content: {
     flex: 1,
     padding: 16,
   },
-  groupSelector: {
-    backgroundColor: '#2C2C2E',
-    borderRadius: 100,
-    padding: 12,
-    marginBottom: 24,
-    alignSelf: 'center',
-    width: '70%',
-    height: '11%',
-  },
-  groupInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  groupImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    // marginRight: 12,
-  },
-  groupName: {
-    color: '#FFFFFF',
-    justifyContent: 'center',
-    fontSize: 18,
-    fontWeight: 'bold',
-    // flex: 1
-  },
-  groupMembers: {
-    flexDirection: 'row',
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-  memberAvatar: {
-    width: 45,
-    height: 45,
-    borderRadius: 50,
-    marginRight: -10,
-    borderWidth: 2,
-    borderColor: '#2C2C2E',
+  errorText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 16,
   },
   inputContainer: {
     marginBottom: 24,
   },
-  inputLabel: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    marginBottom: 8,
-    // marginTop: 20,
-    alignSelf: "center"
-  },
   input: {
     color: '#FFFFFF',
     fontSize: 18,
-    // borderBottomWidth: 1,
-    // borderBottomColor: '#3A3A3C',
-    textAlign: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#3A3A3C',
     paddingVertical: 8,
   },
   amountInput: {
     color: '#FFFFFF',
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: 'bold',
-    borderBottomWidth: 0,
     textAlign: 'center',
-    borderBottomColor: '#3A3A3C',
     paddingVertical: 8,
-
   },
   splitMethodContainer: {
     flexDirection: 'row',
     backgroundColor: "#2C2C2E",
-    justifyContent: 'space-between',
+    borderRadius: 12,
     marginBottom: 24,
-    borderRadius: 20,
+    padding: 4,
   },
   splitMethodButton: {
+    flex: 1,
     paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    // borderColor: '#3A3A3C',
+    paddingHorizontal: 12,
+    borderRadius: 8,
   },
   splitMethodButtonActive: {
     backgroundColor: '#00D09C',
-    borderColor: '#00D09C',
   },
   splitMethodText: {
     color: '#AAAAAA',
     fontSize: 14,
+    textAlign: 'center',
   },
   splitMethodTextActive: {
     color: '#FFFFFF',
@@ -242,6 +359,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 24,
+    backgroundColor: '#2C2C2E',
+    borderRadius: 12,
+    padding: 12,
   },
   paidByLabel: {
     color: '#AAAAAA',
@@ -250,10 +370,6 @@ const styles = StyleSheet.create({
   paidBySelector: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2C2C2E',
-    borderRadius: 20,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
   },
   paidByAvatar: {
     width: 30,
@@ -270,26 +386,84 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     marginBottom: 24,
-    backgroundColor: "#2C2C2E"
+    backgroundColor: "#2C2C2E",
+    borderRadius: 12,
+    padding: 8,
   },
   actionButton: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#2C2C2E',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  doneButton: {
-    backgroundColor: '#00D09C',
-    paddingVertical: 16,
-    alignItems: 'center',
-    borderRadius: 12,
-    margin: 16,
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
   },
-  doneButtonText: {
+  modalContent: {
+    backgroundColor: '#2C2C2E',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
+    maxHeight: '80%',
+  },
+  modalTitle: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  memberItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#3A3A3C',
+  },
+  memberItemImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  memberItemName: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    flex: 1,
+  },
+  memberItemCheck: {
+    marginLeft: 8,
+  },
+  closeButton: {
+    backgroundColor: '#00D09C',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  closeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  noteInputContainer: {
+    backgroundColor: '#2C2C2E',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
+  },
+  noteInput: {
+    backgroundColor: '#3A3A3C',
+    color: '#FFFFFF',
+    borderRadius: 8,
+    padding: 12,
+    height: 120,
+    textAlignVertical: 'top',
+    marginBottom: 16,
+  },
+  datePicker: {
+    backgroundColor: '#2C2C2E',
   },
 });

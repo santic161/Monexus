@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { getAuth } from 'firebase/auth';
 import { useUser } from '../context/UserContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SettingItem = ({ icon, title, hasToggle = false, isToggled = false, onToggle, hasChevron = true }) => (
   <TouchableOpacity style={styles.settingItem}>
@@ -23,13 +24,9 @@ const SettingItem = ({ icon, title, hasToggle = false, isToggled = false, onTogg
 );
 
 export default function AccountScreen({ navigation }) {
-  const { user, updateUser } = useUser();
-
+  const { user, logOut } = useUser();
   const handleSignOut = async () => {
-    GoogleSignin.revokeAccess();
-    GoogleSignin.signOut()
-    updateUser(null);
-    navigation.navigate("Onboarding");
+    logOut();
   };
 
   return (
@@ -47,16 +44,16 @@ export default function AccountScreen({ navigation }) {
       <ScrollView style={styles.content}>
         <View style={styles.profileSection}>
           <Image
-            source={{ uri: 'https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/avatars/b3/b3a33bba1b3c934fbd9fdebcb1551fa68115d314_full.jpg' }}
+            source={{ uri: (user?.photoURL) ? user.photoURL : 'https://t3.ftcdn.net/jpg/00/64/67/80/360_F_64678017_zUpiZFjj04cnLri7oADnyMH0XBYyQghG.jpg' }}
             style={styles.profileImage}
           />
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>{user?.displayName}</Text>
-            <Text style={styles.profileEmail}>lakshaymahur***@gmail.com</Text>
+            <Text style={styles.profileEmail}>{user?.email}</Text>
           </View>
-          <TouchableOpacity>
+          {/* <TouchableOpacity>
             <Ionicons name="pencil" size={24} color="#00D09C" />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
 
         <View style={styles.section}>
@@ -116,17 +113,19 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    padding: 16
   },
   profileSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingTop: 2,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#2C2C2E',
   },
   profileImage: {
-    width: 80,
-    height: 80,
+    width: 70,
+    height: 70,
     borderRadius: 40,
     marginRight: 16,
   },
