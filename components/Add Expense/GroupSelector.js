@@ -8,40 +8,26 @@ export default function GroupSelector({ selectedGroup, groups, onSelectGroup }) 
   const [showGroupPicker, setShowGroupPicker] = useState(false);
   const navigation = useNavigation();
 
-  const renderGroupItem = ({ item }) => {
-    if (item.id === 'create_new') {
-      return (
-        <TouchableOpacity
-          style={styles.createNewGroup}
-          onPress={() => {
-            setShowGroupPicker(false);
-            navigation.navigate('CreateGroup');
-          }}
-        >
-          <Ionicons name="add-circle-outline" size={24} color="#00D09C" />
-          <Text style={styles.createNewGroupText}>Create New Group</Text>
-        </TouchableOpacity>
-      );
-    }
+  const renderGroupItem = ({ item }) => (
+    <TouchableOpacity
+      style={styles.groupItem}
+      onPress={() => {
+        onSelectGroup(item);
+        setShowGroupPicker(false);
+      }}
+    >
+      <Image source={{ uri: item.image }} style={styles.groupItemImage} />
+      <Text style={styles.groupItemName}>{item.name}</Text>
+      {selectedGroup && selectedGroup.id === item.id && (
+        <Ionicons name="checkmark-circle" size={24} color="#00D09C" style={styles.groupItemCheck} />
+      )}
+    </TouchableOpacity>
+  );
 
-    return (
-      <TouchableOpacity
-        style={styles.groupItem}
-        onPress={() => {
-          onSelectGroup(item);
-          setShowGroupPicker(false);
-        }}
-      >
-        <Image source={{ uri: item.image }} style={styles.groupItemImage} />
-        <Text style={styles.groupItemName}>{item.name}</Text>
-        {selectedGroup && selectedGroup.id === item.id && (
-          <Ionicons name="checkmark-circle" size={24} color="#00D09C" style={styles.groupItemCheck} />
-        )}
-      </TouchableOpacity>
-    );
+  const handleCreateNewGroup = () => {
+    setShowGroupPicker(false);
+    navigation.navigate('CreateGroup');
   };
-
-  const groupsWithCreateOption = [{ id: 'create_new' }, ...groups];
 
   return (
     <View>
@@ -58,11 +44,18 @@ export default function GroupSelector({ selectedGroup, groups, onSelectGroup }) 
         transparent={true}
         animationType="slide"
       >
-        <BlurView intensity={100} style={styles.modalContainer}>
+        <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Select Group</Text>
+            <TouchableOpacity
+              style={styles.createNewGroupButton}
+              onPress={handleCreateNewGroup}
+            >
+              <Ionicons name="add-circle-outline" size={24} color="#00D09C" />
+              <Text style={styles.createNewGroupText}>Create New Group</Text>
+            </TouchableOpacity>
             <FlatList
-              data={groupsWithCreateOption}
+              data={groups}
               renderItem={renderGroupItem}
               keyExtractor={(item) => item.id}
               style={styles.groupList}
@@ -74,7 +67,7 @@ export default function GroupSelector({ selectedGroup, groups, onSelectGroup }) 
               <Text style={styles.closeButtonText}>Close</Text>
             </TouchableOpacity>
           </View>
-        </BlurView>
+        </View>
       </Modal>
     </View>
   );
@@ -125,6 +118,18 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textAlign: 'center',
   },
+  createNewGroupButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#3A3A3C',
+  },
+  createNewGroupText: {
+    color: '#00D09C',
+    fontSize: 16,
+    marginLeft: 12,
+  },
   groupList: {
     marginBottom: 16,
   },
@@ -159,17 +164,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  createNewGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#3A3A3C',
-  },
-  createNewGroupText: {
-    color: '#00D09C',
-    fontSize: 16,
-    marginLeft: 12,
-  },
+  }
 });

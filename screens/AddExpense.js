@@ -1,15 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, TextInput, Image, ScrollView, Modal, Animated, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, TextInput, Image, ScrollView, Modal, Animated, ActivityIndicator, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FakeCurrencyInput } from 'react-native-currency-input';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { BlurView } from 'expo-blur';
 import { addExpense, fetchGroups, fetchGroupMembers } from '../utils/firebaseUtils';
 import { useUser } from '../context/UserContext';
-import GroupSelector from '../components/Add Expense/GroupSelector';
+import { useIsFocused } from '@react-navigation/native';
 
 export default function AddExpenseScreen({ navigation }) {
   const { user } = useUser();
+  const isFocused = useIsFocused();
   const [amount, setAmount] = useState(0);
   const [description, setDescription] = useState('');
   const [splitMethod, setSplitMethod] = useState('Equally');
@@ -36,19 +36,22 @@ export default function AddExpenseScreen({ navigation }) {
       duration: 500,
       useNativeDriver: true,
     }).start();
-    loadGroups();
   }, []);
+
+  useEffect(() => {
+    if (isFocused) {
+      loadGroups();
+    }
+  }, [isFocused]);
 
   const loadGroups = async () => {
     setIsLoading(true);
     try {
       const fetchedGroups = await fetchGroups(user.uid);
       setGroups(fetchedGroups);
-      if (fetchedGroups.length === 0) {
-        navigation.navigate('CreateGroup');
-      } else {
+      if (fetchedGroups.length > 0) {
         setSelectedGroup(fetchedGroups[0]);
-        loadGroupMembers(fetchedGroups[0].id);
+        await loadGroupMembers(fetchedGroups[0].id);
       }
     } catch (error) {
       console.error('Error fetching groups:', error);
@@ -62,8 +65,13 @@ export default function AddExpenseScreen({ navigation }) {
     try {
       const members = await fetchGroupMembers(groupId);
       setGroupMembers(members);
+      // Ensure the current user is in the group members list
+      if (!members.some(member => member.id === user.uid)) {
+        setGroupMembers([{ id: user.uid, name: 'You', image: user.image }, ...members]);
+      }
     } catch (error) {
       console.error('Error fetching group members:', error);
+      setError('Failed to fetch group members. Please try again.');
     }
   };
 
@@ -98,53 +106,86 @@ export default function AddExpenseScreen({ navigation }) {
     }
   };
 
+  const renderGroupItem = ({ item }) => (
+    <TouchableOpacity
+      style={styles.groupItem}
+      onPress={() => {
+        setSelectedGroup(item);
+        loadGroupMembers(item.id);
+        setShowGroupPicker(false);
+      }}
+    >
+      <Image source={{ uri: item.image || 'https://via.placeholder.com/40' }} style={styles.groupItemImage} />
+      <Text style={styles.groupItemName}>{item.name}</Text>
+    </TouchableOpacity>
+  );
+
+  const renderMemberItem = ({ item }) => (
+    <TouchableOpacity
+      style={styles.memberItem}
+      onPress={() => {
+        setPaidBy(item.id);
+        setShowPaidByPicker(false);
+      }}
+    >
+      <Image source={{ uri: item.image }} style={styles.memberItemImage} />
+      <Text style={styles.memberItemName}>{item.id === user.uid ? 'You' : item.name}</Text>
+      {paidBy === item.id && (
+        <Ionicons name="checkmark-circle" size={24} color="#00D09C" style={styles.memberItemCheck} />
+      )}
+    </TouchableOpacity>
+  );
+
   return (
-    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+    <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
-          <Ionicons name="close" size={24} color="#FFFFFF" />
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Add Expense</Text>
-        <TouchableOpacity onPress={handleAddExpense} style={styles.headerButton} disabled={isLoading}>
+        <TouchableOpacity onPress={handleAddExpense} disabled={isLoading}>
           {isLoading ? (
             <ActivityIndicator color="#00D09C" />
           ) : (
-            <Text style={styles.saveButtonText}>Save</Text>
+            <Ionicons name="checkmark" size={24} color="#00D09C" />
           )}
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
-        style={styles.content}
-        ref={scrollViewRef}
-        keyboardShouldPersistTaps="handled"
-      >
+      <ScrollView style={styles.content} ref={scrollViewRef} keyboardShouldPersistTaps="handled">
         {error && (
           <Text style={styles.errorText}>{error}</Text>
         )}
 
-        <GroupSelector
-          selectedGroup={selectedGroup}
-          groups={groups}
-          onSelectGroup={(group) => {
-            setSelectedGroup(group);
-            loadGroupMembers(group.id);
-          }}
-        />
+        <TouchableOpacity style={styles.groupSelector} onPress={() => setShowGroupPicker(true)}>
+          <View style={styles.groupInfo}>
+            <Image source={{ uri: selectedGroup?.image || 'https://via.placeholder.com/40' }} style={styles.groupImage} />
+            <Text style={styles.groupName}>{selectedGroup?.name || 'Select Group'}</Text>
+            <Ionicons name="chevron-down" size={20} color="#AAAAAA" />
+          </View>
+        </TouchableOpacity>
+        <View style={styles.groupMembers}>
+          {groupMembers.slice(0, 3).map((member, index) => (
+            <Image key={member.id} source={{ uri: member.image }} style={[styles.memberAvatar, { zIndex: 3 - index }]} />
+          ))}
+        </View>
 
         <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>For</Text>
           <TextInput
             ref={descriptionInputRef}
             style={styles.input}
-            placeholder="Enter a description"
+            placeholder="Enter a Description"
             placeholderTextColor="#AAAAAA"
             autoCapitalize='sentences'
+            cursorColor={"#EFEFEF"}
             value={description}
             onChangeText={setDescription}
           />
         </View>
 
         <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Amount</Text>
           <FakeCurrencyInput
             value={amount}
             onChangeValue={setAmount}
@@ -153,6 +194,7 @@ export default function AddExpenseScreen({ navigation }) {
             delimiter=","
             separator="."
             precision={2}
+            cursorColor={"#FFF"}
           />
         </View>
 
@@ -182,7 +224,7 @@ export default function AddExpenseScreen({ navigation }) {
           <Text style={styles.paidByLabel}>Paid by</Text>
           <View style={styles.paidBySelector}>
             <Image source={{ uri: groupMembers.find(m => m.id === paidBy)?.image }} style={styles.paidByAvatar} />
-            <Text style={styles.paidByText}>{groupMembers.find(m => m.id === paidBy)?.name}</Text>
+            <Text style={styles.paidByText}>{paidBy === user.uid ? 'You' : groupMembers.find(m => m.id === paidBy)?.name}</Text>
             <Ionicons name="chevron-down" size={20} color="#AAAAAA" />
           </View>
         </TouchableOpacity>
@@ -191,51 +233,83 @@ export default function AddExpenseScreen({ navigation }) {
           <TouchableOpacity style={styles.actionButton} onPress={() => setShowDatePicker(true)}>
             <Ionicons name="calendar-outline" size={24} color="#00D09C" />
           </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton}>
+            <Ionicons name="camera-outline" size={24} color="#00D09C" />
+          </TouchableOpacity>
           <TouchableOpacity style={styles.actionButton} onPress={() => setShowNoteInput(true)}>
             <Ionicons name="create-outline" size={24} color="#00D09C" />
           </TouchableOpacity>
         </View>
-
-        {showDatePicker && (
-          <DateTimePicker
-            value={date}
-            mode="date"
-            display="spinner"
-            onChange={(event, selectedDate) => {
-              setShowDatePicker(false);
-              if (selectedDate) setDate(selectedDate);
-            }}
-            style={styles.datePicker}
-          />
-        )}
       </ScrollView>
+
+      <TouchableOpacity style={styles.doneButton} onPress={handleAddExpense} disabled={isLoading}>
+        <Text style={styles.doneButtonText}>Done</Text>
+      </TouchableOpacity>
+
+      <Modal
+        visible={showGroupPicker}
+        transparent={true}
+        animationType="slide"
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Group</Text>
+            <TouchableOpacity
+              style={styles.createGroupButton}
+              onPress={() => {
+                setShowGroupPicker(false);
+                navigation.navigate('CreateGroup');
+              }}
+            >
+              <Ionicons name="add-circle-outline" size={24} color="#00D09C" />
+              <Text style={styles.createGroupButtonText}>Create New Group</Text>
+            </TouchableOpacity>
+            <View style={styles.searchContainer}>
+              <Ionicons name="search" size={20} color="#AAAAAA" style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search groups"
+                placeholderTextColor="#AAAAAA"
+              />
+            </View>
+            <FlatList
+              data={groups}
+              renderItem={renderGroupItem}
+              keyExtractor={(item) => item.id}
+              style={styles.groupList}
+            />
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowGroupPicker(false)}
+            >
+              <Text style={styles.closeButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={showPaidByPicker}
         transparent={true}
         animationType="slide"
       >
-        <BlurView intensity={100} style={styles.modalContainer}>
+        <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Paid By</Text>
-            <ScrollView>
-              {groupMembers.map((member) => (
-                <TouchableOpacity
-                  key={member.id}
-                  style={styles.memberItem}
-                  onPress={() => {
-                    setPaidBy(member.id);
-                    setShowPaidByPicker(false);
-                  }}
-                >
-                  <Image source={{ uri: member.image }} style={styles.memberItemImage} />
-                  <Text style={styles.memberItemName}>{member.name}</Text>
-                  {paidBy === member.id && (
-                    <Ionicons name="checkmark-circle" size={24} color="#00D09C" style={styles.memberItemCheck} />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            <View style={styles.searchContainer}>
+              <Ionicons name="search" size={20} color="#AAAAAA" style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search members"
+                placeholderTextColor="#AAAAAA"
+              />
+            </View>
+            <FlatList
+              data={groupMembers}
+              renderItem={renderMemberItem}
+              keyExtractor={(item) => item.id}
+              style={styles.memberList}
+            />
             <TouchableOpacity
               style={styles.closeButton}
               onPress={() => setShowPaidByPicker(false)}
@@ -243,7 +317,7 @@ export default function AddExpenseScreen({ navigation }) {
               <Text style={styles.closeButtonText}>Close</Text>
             </TouchableOpacity>
           </View>
-        </BlurView>
+        </View>
       </Modal>
 
       <Modal
@@ -251,7 +325,7 @@ export default function AddExpenseScreen({ navigation }) {
         transparent={true}
         animationType="slide"
       >
-        <BlurView intensity={100} style={styles.modalContainer}>
+        <View style={styles.modalContainer}>
           <View style={styles.noteInputContainer}>
             <Text style={styles.modalTitle}>Add a note</Text>
             <TextInput
@@ -270,9 +344,22 @@ export default function AddExpenseScreen({ navigation }) {
               <Text style={styles.closeButtonText}>Save Note</Text>
             </TouchableOpacity>
           </View>
-        </BlurView>
+        </View>
       </Modal>
-    </Animated.View>
+
+      {showDatePicker && (
+        <DateTimePicker
+          value={date}
+          mode="date"
+          display="spinner"
+          onChange={(event, selectedDate) => {
+            setShowDatePicker(false);
+            if (selectedDate) setDate(selectedDate);
+          }}
+          style={styles.datePicker}
+        />
+      )}
+    </View>
   );
 }
 
@@ -286,20 +373,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2C2C2E',
-  },
-  headerButton: {
-    padding: 8,
   },
   headerTitle: {
     color: '#FFFFFF',
     fontSize: 20,
-    fontWeight: 'bold',
-  },
-  saveButtonText: {
-    color: '#00D09C',
-    fontSize: 16,
     fontWeight: 'bold',
   },
   content: {
@@ -312,19 +389,62 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 16,
   },
+  groupSelector: {
+    backgroundColor: '#2C2C2E',
+    borderRadius: 100,
+    padding: 12,
+    marginBottom: 24,
+    alignSelf: 'center',
+    width: '70%',
+  },
+  groupInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  groupImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  groupName: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+    flex: 1,
+    marginLeft: 12,
+  },
+  groupMembers: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  memberAvatar: {
+    width: 45,
+    height: 45,
+    border: 50,
+    marginRight: -10,
+    borderWidth: 2,
+    borderColor: '#2C2C2E',
+  },
   inputContainer: {
     marginBottom: 24,
+  },
+  inputLabel: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    marginBottom: 8,
+    alignSelf: "center"
   },
   input: {
     color: '#FFFFFF',
     fontSize: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: '#3A3A3C',
+    textAlign: 'center',
     paddingVertical: 8,
   },
   amountInput: {
     color: '#FFFFFF',
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: 'bold',
     textAlign: 'center',
     paddingVertical: 8,
@@ -332,18 +452,21 @@ const styles = StyleSheet.create({
   splitMethodContainer: {
     flexDirection: 'row',
     backgroundColor: "#2C2C2E",
-    borderRadius: 12,
+    justifyContent: 'space-between',
     marginBottom: 24,
-    padding: 4,
+    borderRadius: 20,
   },
   splitMethodButton: {
     flex: 1,
     paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   splitMethodButtonActive: {
     backgroundColor: '#00D09C',
+    borderColor: '#00D09C',
   },
   splitMethodText: {
     color: '#AAAAAA',
@@ -360,7 +483,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 24,
     backgroundColor: '#2C2C2E',
-    borderRadius: 12,
+    borderRadius: 20,
     padding: 12,
   },
   paidByLabel: {
@@ -397,9 +520,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  doneButton: {
+    backgroundColor: '#00D09C',
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderRadius: 12,
+    margin: 16,
+  },
+  doneButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
   modalContainer: {
     flex: 1,
     justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContent: {
     backgroundColor: '#2C2C2E',
@@ -414,6 +550,60 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 16,
     textAlign: 'center',
+  },
+  createGroupButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#3A3A3C',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+  },
+  createGroupButtonText: {
+    color: '#00D09C',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#3A3A3C',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    marginBottom: 16,
+  },
+  searchIcon: {
+    marginRight: 10,
+  },
+  searchInput: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 16,
+    paddingVertical: 10,
+  },
+  groupList: {
+    maxHeight: '60%',
+  },
+  groupItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#3A3A3C',
+  },
+  groupItemImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  groupItemName: {
+    color: '#FFFFFF',
+    fontSize: 16,
+  },
+  memberList: {
+    maxHeight: '60%',
   },
   memberItem: {
     flexDirection: 'row',

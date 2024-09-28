@@ -2,9 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Image, FlatList, TextInput, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchContacts, checkUserExists } from '../../utils/firebaseUtils';
+import { useUser } from '../../context/UserContext';
 
 export default function ContactList({ selectedContacts, onSelectContact }) {
+  const { user } = useUser()
   const [contacts, setContacts] = useState([]);
+
   const [filteredContacts, setFilteredContacts] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -14,7 +17,7 @@ export default function ContactList({ selectedContacts, onSelectContact }) {
 
   useEffect(() => {
     if (searchQuery) {
-      setFilteredContacts(contacts.filter(contact => 
+      setFilteredContacts(contacts.filter(contact =>
         contact.name.toLowerCase().includes(searchQuery.toLowerCase())
       ));
     } else {
@@ -23,7 +26,7 @@ export default function ContactList({ selectedContacts, onSelectContact }) {
   }, [searchQuery, contacts]);
 
   const loadContacts = async () => {
-    const fetchedContacts = await fetchContacts();
+    const fetchedContacts = await fetchContacts(user);
     setContacts(fetchedContacts);
     setFilteredContacts(fetchedContacts);
   };

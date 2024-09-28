@@ -1,0 +1,29 @@
+1) Modificar de que en la pantalla de inicio solo aparezcan contactos, y que si no se debe nada o no te deben nada que no se muestren.
+
+1.5) Evaluar si debe estar la pantalla friends o derecho se crea una pantalla group, para asi mostrar los grupos, ya que friends esta en home.
+2) Modificar la pantalla friends para que utilice firestore.
+
+4) Mostrar en la pantalla Activity las ultimas actividades registradas para un usuario.
+5) En AddExpense, mostrar nuestro contacto en PaidBy, junto con los otros contactos.
+6) Realizar la funcion de pago Igualitario, inIgualitario o por porcentaje.
+7) Quitar o reanimar de manera mas descente el modal al seleccionar un grupo o la persona la cual pago.
+8) Modificar los colores del texto del selector de fecha.
+9) Solucionar el siguiente error al acceder a CreateGroup:
+    
+    VirtualizedLists should never be nested inside plain ScrollViews with the same orientation because it can break windowing and other functionality - use another VirtualizedList-backed container instead.
+
+10) Solucionar UI de los contactos, ya que no poseen foto.
+11) Poner imagenes de defecto, de perfil mayoritariamente (SplitWise mete el icono de telefono en contactos).
+12) Evaluar donde se van a mostrar los grupos.
+13) Modificar toda la pantalla settings para que tenga utilidad.
+
+14) Agregar a usuario el numero de telefono para poder ver si los contactos de un usuario tienen la app [URGENTE].
+
+FUTURO:
+12) Agregar funcion para exportar un grupo.
+13) Agregar, de alguna manera u otra, graficos.
+14) Agregar funcion de registrarse y loguearse con email.
+
+
+
+

@@ -62,6 +62,7 @@ export default function HomeScreen() {
       const q = query(collection(db, 'groups'), where('members', 'array-contains', user.uid));
       const unsubscribe = onSnapshot(q, (querySnapshot) => {
         const groups = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        console.log(groups);
         setUserGroups(groups);
       });
 
@@ -136,7 +137,7 @@ export default function HomeScreen() {
         amount={0}
         description={`${group.members.length} members`}
         date=""
-        image="https://randomuser.me/api/portraits/men/1.jpg"
+        image={group.image}
         type="owed"
       />
     ));

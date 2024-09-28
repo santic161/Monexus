@@ -28,6 +28,8 @@ export const UserProvider = ({ children }) => {
         if (value !== null) {
           const userInfo = await AsyncStorage.getItem('userInfo');
           const parsedUserInfo = JSON.parse(userInfo);
+          // console.log("🚀 ~ checkPreviousLogin ~ parsedUserInfo:", parsedUserInfo)
+          
           setUser(parsedUserInfo);
           setIsLoggedIn(true);
           // Sync with Firestore
